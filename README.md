@@ -1,6 +1,6 @@
 # LunarFuzz
 
-Fuzzer for Dynamic JS application, such as Angular apps, that require a browser that render the JS and thus can not be fuzzed with tools like ffuf (afaik). LunarFuzz uses go-rod, a selenium-like toolkit which runs a headless browser that does the requests.
+Fuzzer for Dynamic JS applications, such as Angular apps, that require a browser that renders the JS and thus can not be fuzzed with tools like ffuf (afaik). LunarFuzz uses go-rod, a selenium-like toolkit which runs a headless browser that does the requests.
 
 However, I don't know shit about go, so dont expect good code. Python was too slow, Nim didn't have a good library for a webdriver and I hate writing Rust-code with a passion, so here we are.
 
