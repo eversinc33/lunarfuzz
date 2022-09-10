@@ -14,35 +14,34 @@ import (
 	"github.com/eversinc33/lunarfuzz/driver"
 	"github.com/eversinc33/lunarfuzz/logger"
 	"github.com/eversinc33/lunarfuzz/utils"
+	color "github.com/fatih/color"
 	"github.com/gernest/wow"
 	"github.com/gernest/wow/spin"
 
 	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/proto"
 )
 
 func calibrate(browser *rod.Browser, target_url string) ([]string, []string) {
 	w := wow.New(os.Stdout, spin.Get(spin.Squish), " Calibrating ...")
 	w.Start()
 
+	var target proto.TargetCreateTarget
 	// Call random url that is not likely to exist to try and get a default/404 page
-	bogus_response, err := browser.MustPage(fmt.Sprintf("%s%s", target_url, utils.RandStr(10))).HTML()
+	target.URL = fmt.Sprintf("%s%s", target_url, utils.RandStr(10))
+
+	bogus_response, err := browser.Page(target)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Error calibrating: %s", err))
+		logger.LogError(fmt.Sprintf("\nError calibrating: %s", err))
+		os.Exit(1)
 	}
-	page_words := []string{fmt.Sprint(len(strings.Split(bogus_response, " ")))}
-	page_size := []string{fmt.Sprint(len(bogus_response))}
+	res, _ := bogus_response.HTML()
+
+	page_words := []string{fmt.Sprint(len(strings.Split(res, " ")))}
+	page_size := []string{fmt.Sprint(len(res))}
 
 	w.PersistWith(spin.Spinner{Frames: []string{"A️"}}, fmt.Sprintf("utocalibration found size: %s, words: %s", page_size[0], page_words[0]))
 	return page_size, page_words
-}
-
-func setupBrowser(cookies *string) *rod.Browser {
-	cookies_to_use := driver.ParseCookies(cookies)
-	browser := rod.New().MustConnect()
-	for _, cookie := range cookies_to_use {
-		browser.MustSetCookies(&cookie)
-	}
-	return browser
 }
 
 func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, take_screenshot bool, autocalibrate bool, headers []string) {
@@ -71,6 +70,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 	}
 
 	start := time.Now()
+	n_errors := 0
 
 	for scanner.Scan() {
 		fuzz := scanner.Text()
@@ -78,13 +78,16 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 
 		page := browser.MustPage("")
 		page.SetExtraHeaders(headers)
-		page.MustNavigate(target)
+		err := page.Navigate(target)
 
-		page_content, err := page.HTML()
 		if err != nil {
-			// TODO: count errors
-			log.Fatal(err)
+			n_errors++
+			fmt.Print("\033[G\033[K")
+			logger.Log(fmt.Sprintf("[%d/%d] Errors: %d :: %s", current_word, n_words, n_errors, target))
+			current_word++
+			continue
 		}
+		page_content, _ := page.HTML()
 		page_words := fmt.Sprint(len(strings.Split(page_content, " ")))
 		page_size := fmt.Sprint(len(page_content))
 
@@ -104,8 +107,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 		}
 
 		fmt.Print("\033[G\033[K")
-		logger.Log(fmt.Sprintf("[%d/%d] :: %s", current_word, n_words, target))
-
+		logger.Log(fmt.Sprintf("[%d/%d] Errors: %d :: %s", current_word, n_words, n_errors, target))
 		current_word++
 	}
 
@@ -119,7 +121,12 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 }
 
 func main() {
-	fmt.Println("LunarFuzz v0.0.1")
+	color.HiCyan(".-.   .-. .-..-. .-.  .--.  .----. .----..-. .-. .---. .---. ")
+	color.Cyan("| |   | { } ||  `| | / {} \\ | {}  }| {_  | { } |{_   /{_   / ")
+	color.Blue("| `--.| {_} || |\\  |/  /\\  \\| .-. \\| |   | {_} | /    }/    }")
+	color.HiBlue("`----'`-----'`-' `-'`-'  `-'`-' `-'`-'   `-----' `---' `---'")
+	color.Yellow("LunarFuzz v0.0.1")
+	fmt.Println()
 
 	// TODO: use better flag library
 	target_url := flag.String("u", "", "Target url")
@@ -161,7 +168,7 @@ func main() {
 
 	headers_to_use := driver.ParseHeaders(headers)
 
-	browser := setupBrowser(cookies)
+	browser := driver.SetupBrowser(cookies)
 	defer browser.MustClose()
 
 	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, *take_screenshot, autocalibrate, headers_to_use)
