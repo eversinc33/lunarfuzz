@@ -2,6 +2,12 @@
 
 Fuzzer for Dynamic JS applications, such as Angular apps, that require a browser that renders the JS and thus can not be fuzzed with tools like ffuf (afaik). LunarFuzz uses go-rod, a selenium-like toolkit which runs a headless browser that does the requests.
 
+### Installation
+
+```bash
+go install github.com/eversinc33/lunarfuzz@latest
+```
+
 ### Usage
 
 ```
@@ -31,7 +37,7 @@ Arguments:
       --fm           Filter responses by substring match. Can also specify
                      multiple, e.g. '404,Not found'
   -b  --cookies      Cookies to use in the format of 'authToken=abcdefg;
-                     __otherCookie=1
+                     __otherCookie=1'
   -H  --Headers      Headers to use in the format of 'Header: Value; Header:
                      Value'
       --screenshot   Save screenshots for matches. Default: false
@@ -48,13 +54,12 @@ Examples:
 # Autocalibrate, add cookies, save screenshots on match
 lunarfuzz -u https://target.site -w /usr/share/wordlists/dirb/big.txt --screenshot -b "SESSION=XYZ; __OTHER_COOKIE=1"
 # filter by sizes
-lunarfuzz -u https://target.site -w /usr/share/wordlists/dirb/big.txt -fs 1000,1001
-# filter by string match, use a custom header, save output to file and use 20 threads
-lunarfuzz -u https://target.site -w /usr/share/wordlists/dirb/big.txt -fm "404,not found" -t 20 -H "Authorization: Basic ZGVlejpudXRz"
+lunarfuzz -u https://target.site -w /usr/share/wordlists/dirb/big.txt --fs 1000,1001
+# filter by string match, use a custom header, save findings to file and use 20 threads
+lunarfuzz -u https://target.site -w /usr/share/wordlists/dirb/big.txt -fm "404,not found" -t 20 -H "Authorization: Basic ZGVlejpudXRz" -o ./matches.txt
 ```
 
-
-##### Disclaimer 
+#### Disclaimer 
 
 I don't know shit about go, so dont expect good/performant code. But python was too slow, Nim didn't have a good library for a webdriver and I hate writing Rust-code with a passion, so here we are.
 

@@ -199,7 +199,7 @@ func main() {
 	fs := parser.String("", "fs", &argparse.Options{Required: false, Help: "Filter responses by size. Can also specify multiple, e.g. 80,102"})
 	fw := parser.String("", "fw", &argparse.Options{Required: false, Help: "Filter responses by word count. Can also specify multiple, e.g. 100,101,102"})
 	fm := parser.String("", "fm", &argparse.Options{Required: false, Help: "Filter responses by substring match. Can also specify multiple, e.g. '404,Not found'"})
-	cookies := parser.String("b", "cookies", &argparse.Options{Required: false, Help: "Cookies to use in the format of 'authToken=abcdefg; __otherCookie=1"})
+	cookies := parser.String("b", "cookies", &argparse.Options{Required: false, Help: "Cookies to use in the format of 'authToken=abcdefg; __otherCookie=1'"})
 	headers := parser.String("H", "Headers", &argparse.Options{Required: false, Help: "Headers to use in the format of 'Header: Value; Header: Value'"})
 	take_screenshot := parser.Flag("", "screenshot", &argparse.Options{Required: false, Help: "Save screenshots for matches", Default: false})
 	max_goroutines := parser.Int("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: 5})
