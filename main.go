@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -20,6 +19,7 @@ import (
 	"github.com/gernest/wow/spin"
 	"github.com/zenthangplus/goccm"
 
+	"github.com/akamensky/argparse"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
@@ -118,11 +118,14 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 			} else if filter_words != nil && !utils.Contains(filter_words, fmt.Sprint(r.Words)) {
 				r.Match = true
 			} else if filter_match != nil {
+				found_string_match := false
 				for _, filter := range filter_match {
-					if !strings.Contains(page_content, filter) {
-						r.Match = true
+					if strings.Contains(page_content, filter) {
+						found_string_match = true
 					}
 				}
+				// if no match was found, the page is valid
+				r.Match = !found_string_match
 			}
 
 			if r.Match {
@@ -178,7 +181,7 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	logger.Logln(fmt.Sprintf("Finished fuzzing %d urls", n_words))
 	logger.Logln(fmt.Sprintf(":: Matches:      %d", n_matches))
 	logger.Logln(fmt.Sprintf(":: Errors:       %d", n_errors))
-	logger.Logln(fmt.Sprintf(":: Time elapsed: %s", elapsed))
+	logger.Logln(fmt.Sprintf(":: Time elapsed: %s (~%drps)", elapsed, n_words/int(elapsed.Seconds())))
 	//c.WaitAllDone()
 }
 
@@ -190,21 +193,25 @@ func main() {
 	fmt.Println("LunarFuzz v0.0.1")
 	fmt.Println()
 
-	// TODO: use better flag library
-	target_url := flag.String("u", "", "Target url")
-	wordlist := flag.String("w", "", "Wordlist to use")
-	fs := flag.String("fs", "", "Filter response by size")
-	fw := flag.String("fw", "", "Filter response by words")
-	fm := flag.String("fm", "", "Filter response by string match")
-	cookies := flag.String("b", "", "Cookies to use")
-	headers := flag.String("H", "", "Headers to use in the format of 'Header: Value; Header: Value'")
-	take_screenshot := flag.Bool("screenshot", false, "Save screenshots for matches")
-	max_goroutines := flag.Int("t", 5, "Max threads. Defaults to 5")
-	force_no_calibration := flag.Bool("no-ac", false, "Do not run autocalibration if no filter is given. Will output every url as a finding")
-	fast_mode := flag.Bool("fast", false, "Do not wait for page to render completely")
-	output_file := flag.String("o", "", "File to save all matching urls to")
+	parser := argparse.NewParser("lunarfuzz", "Directory fuzzer for dynamic JS & single page apps")
+	target_url := parser.String("u", "url", &argparse.Options{Required: true, Help: "Target url"})
+	wordlist := parser.String("w", "wordlist", &argparse.Options{Required: true, Help: "Wordlist to use"})
+	fs := parser.String("", "fs", &argparse.Options{Required: false, Help: "Filter responses by size. Can also specify multiple, e.g. 80,102"})
+	fw := parser.String("", "fw", &argparse.Options{Required: false, Help: "Filter responses by word count. Can also specify multiple, e.g. 100,101,102"})
+	fm := parser.String("", "fm", &argparse.Options{Required: false, Help: "Filter responses by substring match. Can also specify multiple, e.g. '404,Not found'"})
+	cookies := parser.String("b", "cookies", &argparse.Options{Required: false, Help: "Cookies to use in the format of 'authToken=abcdefg; __otherCookie=1"})
+	headers := parser.String("H", "Headers", &argparse.Options{Required: false, Help: "Headers to use in the format of 'Header: Value; Header: Value'"})
+	take_screenshot := parser.Flag("", "screenshot", &argparse.Options{Required: false, Help: "Save screenshots for matches", Default: false})
+	max_goroutines := parser.Int("t", "threads", &argparse.Options{Required: false, Help: "Number of threads", Default: 5})
+	force_no_calibration := parser.Flag("", "no-ac", &argparse.Options{Required: false, Help: "Do not run autocalibration if no filter is given. Will output every url as a finding", Default: false})
+	fast_mode := parser.Flag("", "2f2f", &argparse.Options{Required: false, Help: "Do not wait for page to render completely", Default: false})
+	output_file := parser.String("o", "output-file", &argparse.Options{Required: false, Help: "File to save all matching urls to"})
 
-	flag.Parse()
+	err := parser.Parse(os.Args)
+	if err != nil {
+		fmt.Print(parser.Usage(err))
+		os.Exit(1)
+	}
 
 	if !strings.HasPrefix(*target_url, "http://") && !strings.HasPrefix(*target_url, "https://") {
 		logger.LogAlert("Url should start with http:// or https://")
