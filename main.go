@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/eversinc33/lunarfuzz/driver"
+	"github.com/eversinc33/lunarfuzz/fuzz"
 	"github.com/eversinc33/lunarfuzz/logger"
 	"github.com/eversinc33/lunarfuzz/utils"
 	color "github.com/fatih/color"
@@ -50,7 +51,7 @@ func calibrate(browser *rod.Browser, target_url string, fast_mode bool) ([]strin
 	return page_size, page_words
 }
 
-func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, filter_match []string, take_screenshot bool, headers []string, fast_mode bool) {
+func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, filter_match []string, take_screenshot bool, headers []string, fast_mode bool, max_goroutines int) {
 
 	wordlist, err := os.Open(wordlist_path)
 	if err != nil {
@@ -59,7 +60,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 	defer wordlist.Close()
 
 	n_words, err := utils.CountLines(wordlist)
-	current_word := 1
+	current_word := 0
 
 	if err != nil {
 		log.Fatal(err)
@@ -74,56 +75,76 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 	start := time.Now()
 	n_errors := 0
 
+	result_channel := make(chan fuzz.Result)
+	// TODO: limit number of goroutines according to max_goroutines
+
 	for scanner.Scan() {
-		fuzz := scanner.Text()
-		target := target_url + fuzz
+		fuzz_string := scanner.Text()
 
-		page := browser.MustPage("")
-		page.SetExtraHeaders(headers)
-		err := page.Navigate(target)
+		go func(counter int, path string) {
+			target := target_url + path
 
-		if err != nil {
-			n_errors++
-			logger.LogStatus(current_word, n_words, n_errors, target)
-			current_word++
-			continue
-		}
+			var r fuzz.Result
+			r.IsError = false
+			r.Path = target
+			r.Match = false
+			r.Counter = counter
 
-		if !fast_mode {
-			page.MustWaitLoad()
-		}
+			// Create new tab and navigate to page
+			page := browser.MustPage("")
+			page.SetExtraHeaders(headers)
+			err := page.Navigate(target)
 
-		page_content, _ := page.HTML()
-		page_words := fmt.Sprint(len(strings.Split(page_content, " ")))
-		page_size := fmt.Sprint(len(page_content))
+			if err != nil {
+				r.IsError = true
+				return
+			}
 
-		found := false
-		if filter_size != nil && !utils.Contains(filter_size, page_size) {
-			found = true
-		} else if filter_words != nil && !utils.Contains(filter_words, page_words) {
-			found = true
-		} else if filter_match != nil {
-			for _, filter := range filter_match {
-				if !strings.Contains(page_content, filter) {
-					found = true
+			if !fast_mode {
+				page.MustWaitLoad()
+			}
+
+			page_content, _ := page.HTML()
+			r.Words = len(strings.Split(page_content, " "))
+			r.Size = len(page_content)
+
+			if filter_size != nil && !utils.Contains(filter_size, fmt.Sprint(r.Size)) {
+				r.Match = true
+			} else if filter_words != nil && !utils.Contains(filter_words, fmt.Sprint(r.Words)) {
+				r.Match = true
+			} else if filter_match != nil {
+				for _, filter := range filter_match {
+					if !strings.Contains(page_content, filter) {
+						r.Match = true
+					}
 				}
 			}
-		}
 
-		if found {
-			logger.LogFound(target, page_words, page_size)
-
-			if take_screenshot {
-				page.MustScreenshot(fmt.Sprintf("output/%s.png", fuzz))
+			if r.Match {
+				if take_screenshot {
+					page.MustScreenshot(fmt.Sprintf("output/%s.png", path))
+				}
 			}
-		}
 
-		logger.LogStatus(current_word, n_words, n_errors, target)
+			result_channel <- r
+		}(current_word, fuzz_string)
+
 		current_word++
 	}
 
+	// TODO: verify this is the right way to handle errors
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
+	}
+
+	for i := 1; i <= current_word; i++ {
+		r := <-result_channel
+		if r.Match {
+			logger.LogFound(r.Path, r.Words, r.Size)
+		} else if r.IsError {
+			n_errors++
+		}
+		logger.LogStatus(i, n_words, n_errors, r.Path)
 	}
 
 	elapsed := time.Since(start)
@@ -148,6 +169,7 @@ func main() {
 	cookies := flag.String("b", "", "Cookies to use")
 	headers := flag.String("H", "", "Headers to use in the format of 'Header: Value; Header: Value'")
 	take_screenshot := flag.Bool("screenshot", false, "Save screenshots for matches")
+	max_goroutines := flag.Int("t", 5, "Max threads. Default to 5")
 	force_no_calibration := flag.Bool("no-ac", false, "Do not run autocalibration if no filter is given. Will output every url as a finding")
 	fast_mode := flag.Bool("fast", false, "Do not wait for page to render completely")
 
@@ -192,5 +214,5 @@ func main() {
 	fmt.Println()
 	fmt.Println()
 
-	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, headers_to_use, *fast_mode)
+	doFuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, headers_to_use, *fast_mode, *max_goroutines)
 }

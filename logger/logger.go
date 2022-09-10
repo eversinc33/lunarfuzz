@@ -18,9 +18,9 @@ func LogError(msg string) {
 	color.Red(msg)
 }
 
-func LogFound(path string, words string, size string) {
+func LogFound(path string, words int, size int) {
 	fmt.Print("\033[G\033[K")
-	LogPositive(fmt.Sprintf("%s :: Words: %s, Size: %s\n", path, words, size))
+	LogPositive(fmt.Sprintf("%s :: Words: %d, Size: %d\n", path, words, size))
 }
 
 func LogAlert(msg string) {
