@@ -18,6 +18,7 @@ import (
 	color "github.com/fatih/color"
 	"github.com/gernest/wow"
 	"github.com/gernest/wow/spin"
+	"github.com/zenthangplus/goccm"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
@@ -60,7 +61,7 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	defer wordlist.Close()
 
 	n_words, err := utils.CountLines(wordlist)
-	current_word := 0
+	current_word := 1
 
 	if err != nil {
 		log.Fatal(err)
@@ -76,13 +77,14 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	n_errors := 0
 
 	result_channel := make(chan fuzz.Result)
-	// TODO: limit number of goroutines according to max_goroutines
+	c := goccm.New(max_goroutines)
 
 	for scanner.Scan() {
 		fuzz_string := scanner.Text()
 
 		go func(counter int, path string) {
 			target := target_url + path
+			defer c.Done()
 
 			var r fuzz.Result
 			r.IsError = false
@@ -91,17 +93,20 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 			r.Counter = counter
 
 			// Create new tab and navigate to page
-			page := browser.MustPage("")
+			var p proto.TargetCreateTarget
+			p.URL = ""
+			page, _ := browser.Page(p)
 			page.SetExtraHeaders(headers)
 			err := page.Navigate(target)
 
 			if err != nil {
 				r.IsError = true
+				result_channel <- r
 				return
 			}
 
 			if !fast_mode {
-				page.MustWaitLoad()
+				page.WaitLoad()
 			}
 
 			page_content, _ := page.HTML()
@@ -122,7 +127,9 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 
 			if r.Match {
 				if take_screenshot {
-					page.MustScreenshot(fmt.Sprintf("output/%s.png", path))
+					var sc proto.PageCaptureScreenshot
+					sc_bytes, _ := page.Screenshot(false, &sc)
+					os.WriteFile(fmt.Sprintf("./output/%s.png", path), sc_bytes, 0644)
 				}
 			}
 
@@ -137,7 +144,7 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 		log.Fatal(err)
 	}
 
-	for i := 1; i <= current_word; i++ {
+	for i := 1; i < current_word; i++ {
 		r := <-result_channel
 		if r.Match {
 			logger.LogFound(r.Path, r.Words, r.Size)
@@ -148,8 +155,9 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	}
 
 	elapsed := time.Since(start)
-	fmt.Println()
-	logger.LogPositive(fmt.Sprintf("Finished fuzzing %d urls in %s", n_words, elapsed))
+	logger.ClearLine()
+	logger.LogPositive(fmt.Sprintf("Finished fuzzing %d urls in %s with %d errors", n_words, elapsed, n_errors))
+	//c.WaitAllDone()
 }
 
 func main() {
