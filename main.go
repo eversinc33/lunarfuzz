@@ -22,7 +22,7 @@ import (
 	"github.com/go-rod/rod/lib/proto"
 )
 
-func calibrate(browser *rod.Browser, target_url string) ([]string, []string) {
+func calibrate(browser *rod.Browser, target_url string, fast_mode bool) ([]string, []string) {
 	w := wow.New(os.Stdout, spin.Get(spin.Squish), " Calibrating ...")
 	w.Start()
 
@@ -30,21 +30,27 @@ func calibrate(browser *rod.Browser, target_url string) ([]string, []string) {
 	// Call random url that is not likely to exist to try and get a default/404 page
 	target.URL = fmt.Sprintf("%s%s", target_url, utils.RandStr(10))
 
-	bogus_response, err := browser.Page(target)
+	page, err := browser.Page(target)
+
 	if err != nil {
 		logger.LogError(fmt.Sprintf("\nError calibrating: %s", err))
 		os.Exit(1)
 	}
-	res, _ := bogus_response.HTML()
+
+	if !fast_mode {
+		page.MustWaitLoad()
+	}
+
+	res, _ := page.HTML()
 
 	page_words := []string{fmt.Sprint(len(strings.Split(res, " ")))}
 	page_size := []string{fmt.Sprint(len(res))}
 
-	w.PersistWith(spin.Spinner{Frames: []string{"A️"}}, fmt.Sprintf("utocalibration found size: %s, words: %s", page_size[0], page_words[0]))
+	w.PersistWith(spin.Spinner{Frames: []string{"A️"}}, fmt.Sprintf("utocalibration result: filter-size: %s, filter-words: %s", page_size[0], page_words[0]))
 	return page_size, page_words
 }
 
-func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, filter_match []string, take_screenshot bool, autocalibrate bool, headers []string, fast_mode bool) {
+func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, filter_match []string, take_screenshot bool, headers []string, fast_mode bool) {
 
 	wordlist, err := os.Open(wordlist_path)
 	if err != nil {
@@ -65,10 +71,6 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 	}
 	scanner := bufio.NewScanner(wordlist)
 
-	if autocalibrate {
-		_, filter_words = calibrate(browser, target_url) // Filtering by words is more reliable
-	}
-
 	start := time.Now()
 	n_errors := 0
 
@@ -82,8 +84,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 
 		if err != nil {
 			n_errors++
-			fmt.Print("\033[G\033[K")
-			logger.Log(fmt.Sprintf("[%d/%d] Errors: %d :: %s", current_word, n_words, n_errors, target))
+			logger.LogStatus(current_word, n_words, n_errors, target)
 			current_word++
 			continue
 		}
@@ -91,6 +92,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 		if !fast_mode {
 			page.MustWaitLoad()
 		}
+
 		page_content, _ := page.HTML()
 		page_words := fmt.Sprint(len(strings.Split(page_content, " ")))
 		page_size := fmt.Sprint(len(page_content))
@@ -116,8 +118,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 			}
 		}
 
-		fmt.Print("\033[G\033[K")
-		logger.Log(fmt.Sprintf("[%d/%d] Errors: %d :: %s", current_word, n_words, n_errors, target))
+		logger.LogStatus(current_word, n_words, n_errors, target)
 		current_word++
 	}
 
@@ -127,7 +128,7 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 
 	elapsed := time.Since(start)
 	fmt.Println()
-	logger.LogResult(fmt.Sprintf("Finished fuzzing %d urls in %s", n_words, elapsed))
+	logger.LogPositive(fmt.Sprintf("Finished fuzzing %d urls in %s", n_words, elapsed))
 }
 
 func main() {
@@ -135,7 +136,7 @@ func main() {
 	color.Cyan("| |   | { } ||  `| | / {} \\ | {}  }| {_  | { } |{_   /{_   / ")
 	color.Blue("| `--.| {_} || |\\  |/  /\\  \\| .-. \\| |   | {_} | /    }/    }")
 	color.HiBlue("`----'`-----'`-' `-'`-'  `-'`-' `-'`-'   `-----' `---' `---'")
-	color.Yellow("LunarFuzz v0.0.1")
+	fmt.Println("LunarFuzz v0.0.1")
 	fmt.Println()
 
 	// TODO: use better flag library
@@ -153,7 +154,7 @@ func main() {
 	flag.Parse()
 
 	if !strings.HasPrefix(*target_url, "http://") && !strings.HasPrefix(*target_url, "https://") {
-		logger.LogResult("Url should start with http:// or https://")
+		logger.LogAlert("Url should start with http:// or https://")
 		os.Exit(1)
 	}
 	if !strings.HasSuffix(*target_url, "/") {
@@ -184,5 +185,12 @@ func main() {
 	browser := driver.SetupBrowser(cookies)
 	defer browser.MustClose()
 
-	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, autocalibrate, headers_to_use, *fast_mode)
+	if autocalibrate {
+		_, filter_words = calibrate(browser, *target_url, *fast_mode) // Filtering by words is more reliable
+	}
+	logger.Log(fmt.Sprintf("Starting to fuzz %s with wordlist %s...", *target_url, *wordlist))
+	fmt.Println()
+	fmt.Println()
+
+	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, headers_to_use, *fast_mode)
 }

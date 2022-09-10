@@ -20,9 +20,22 @@ func LogError(msg string) {
 
 func LogFound(path string, words string, size string) {
 	fmt.Print("\033[G\033[K")
-	color.Green(fmt.Sprintf("%s :: Words: %s, Size: %s\n", path, words, size))
+	LogPositive(fmt.Sprintf("%s :: Words: %s, Size: %s\n", path, words, size))
 }
 
-func LogResult(msg string) {
+func LogAlert(msg string) {
 	color.Yellow(fmt.Sprintf("%s", msg))
+}
+
+func LogPositive(msg string) {
+	color.Green(fmt.Sprintf("%s", msg))
+}
+
+func ClearLine() {
+	fmt.Print("\033[G\033[K")
+}
+
+func LogStatus(current_word int, n_words int, n_errors int, target string) {
+	ClearLine()
+	Log(fmt.Sprintf("[%d/%d] Errors: %d :: %s", current_word, n_words, n_errors, target))
 }
