@@ -3,11 +3,12 @@ package utils
 import (
 	"bytes"
 	"io"
+	"strings"
 )
 
 func CountLines(r io.Reader) (int, error) {
 	buf := make([]byte, 32*1024)
-	count := 0
+	count := 1
 	lineSep := []byte{'\n'}
 
 	for {
@@ -31,4 +32,12 @@ func Contains(s []string, e string) bool {
 		}
 	}
 	return false
+}
+
+func SplitOrNil(s string, sep string) []string {
+	if s == "" {
+		return nil
+	}
+
+	return strings.Split(s, sep)
 }
