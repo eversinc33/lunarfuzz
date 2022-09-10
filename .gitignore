@@ -1,3 +1,4 @@
 output/
 wordlists/
 lunarfuzz
+matches.txt
