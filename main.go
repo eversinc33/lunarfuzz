@@ -44,7 +44,7 @@ func calibrate(browser *rod.Browser, target_url string) ([]string, []string) {
 	return page_size, page_words
 }
 
-func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, take_screenshot bool, autocalibrate bool, headers []string) {
+func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, filter_match []string, take_screenshot bool, autocalibrate bool, headers []string, fast_mode bool) {
 
 	wordlist, err := os.Open(wordlist_path)
 	if err != nil {
@@ -87,6 +87,10 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 			current_word++
 			continue
 		}
+
+		if !fast_mode {
+			page.MustWaitLoad()
+		}
 		page_content, _ := page.HTML()
 		page_words := fmt.Sprint(len(strings.Split(page_content, " ")))
 		page_size := fmt.Sprint(len(page_content))
@@ -96,6 +100,12 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 			found = true
 		} else if filter_words != nil && !utils.Contains(filter_words, page_words) {
 			found = true
+		} else if filter_match != nil {
+			for _, filter := range filter_match {
+				if !strings.Contains(page_content, filter) {
+					found = true
+				}
+			}
 		}
 
 		if found {
@@ -133,10 +143,12 @@ func main() {
 	wordlist := flag.String("w", "", "Wordlist to use")
 	fs := flag.String("fs", "", "Filter response by size")
 	fw := flag.String("fw", "", "Filter response by words")
+	fm := flag.String("fm", "", "Filter response by string match")
 	cookies := flag.String("b", "", "Cookies to use")
 	headers := flag.String("H", "", "Headers to use in the format of 'Header: Value; Header: Value'")
 	take_screenshot := flag.Bool("screenshot", false, "Save screenshots for matches")
 	force_no_calibration := flag.Bool("no-ac", false, "Do not run autocalibration if no filter is given. Will output every url as a finding")
+	fast_mode := flag.Bool("fast", false, "Do not wait for page to render completely")
 
 	flag.Parse()
 
@@ -150,10 +162,11 @@ func main() {
 
 	filter_size := utils.SplitOrNil(*fs, ",")
 	filter_words := utils.SplitOrNil(*fw, ",")
+	filter_match := utils.SplitOrNil(*fm, ",")
 
 	autocalibrate := false
 	if !*force_no_calibration {
-		if filter_size == nil && filter_words == nil {
+		if filter_size == nil && filter_words == nil && filter_match == nil {
 			autocalibrate = true
 		}
 	}
@@ -171,5 +184,5 @@ func main() {
 	browser := driver.SetupBrowser(cookies)
 	defer browser.MustClose()
 
-	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, *take_screenshot, autocalibrate, headers_to_use)
+	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, autocalibrate, headers_to_use, *fast_mode)
 }
