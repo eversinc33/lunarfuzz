@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	driver "github.com/eversinc33/lunarfuzz/browser"
+	"github.com/eversinc33/lunarfuzz/driver"
 	"github.com/eversinc33/lunarfuzz/logger"
 	"github.com/eversinc33/lunarfuzz/utils"
 	"github.com/gernest/wow"
@@ -21,7 +21,7 @@ import (
 )
 
 func calibrate(browser *rod.Browser, target_url string) ([]string, []string) {
-	w := wow.New(os.Stdout, spin.Get(spin.Dots), " Calibrating ...")
+	w := wow.New(os.Stdout, spin.Get(spin.Squish), " Calibrating ...")
 	w.Start()
 
 	// Call random url that is not likely to exist to try and get a default/404 page
@@ -45,7 +45,7 @@ func setupBrowser(cookies *string) *rod.Browser {
 	return browser
 }
 
-func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, take_screenshot bool, autocalibrate bool) {
+func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_size []string, filter_words []string, take_screenshot bool, autocalibrate bool, headers []string) {
 
 	wordlist, err := os.Open(wordlist_path)
 	if err != nil {
@@ -76,8 +76,15 @@ func fuzz(browser *rod.Browser, target_url string, wordlist_path string, filter_
 		fuzz := scanner.Text()
 		target := target_url + fuzz
 
-		page := browser.MustPage(target)
-		page_content, _ := page.HTML()
+		page := browser.MustPage("")
+		page.SetExtraHeaders(headers)
+		page.MustNavigate(target)
+
+		page_content, err := page.HTML()
+		if err != nil {
+			// TODO: count errors
+			log.Fatal(err)
+		}
 		page_words := fmt.Sprint(len(strings.Split(page_content, " ")))
 		page_size := fmt.Sprint(len(page_content))
 
@@ -120,13 +127,14 @@ func main() {
 	fs := flag.String("fs", "", "Filter response by size")
 	fw := flag.String("fw", "", "Filter response by words")
 	cookies := flag.String("b", "", "Cookies to use")
+	headers := flag.String("H", "", "Headers to use in the format of 'Header: Value; Header: Value'")
 	take_screenshot := flag.Bool("screenshot", false, "Save screenshots for matches")
 	force_no_calibration := flag.Bool("no-ac", false, "Do not run autocalibration if no filter is given. Will output every url as a finding")
 
 	flag.Parse()
 
 	if !strings.HasPrefix(*target_url, "http://") && !strings.HasPrefix(*target_url, "https://") {
-		fmt.Println("[!] Url should start with http:// or https://")
+		logger.LogResult("Url should start with http:// or https://")
 		os.Exit(1)
 	}
 	if !strings.HasSuffix(*target_url, "/") {
@@ -151,8 +159,10 @@ func main() {
 		}
 	}
 
+	headers_to_use := driver.ParseHeaders(headers)
+
 	browser := setupBrowser(cookies)
 	defer browser.MustClose()
 
-	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, *take_screenshot, autocalibrate)
+	fuzz(browser, *target_url, *wordlist, filter_size, filter_words, *take_screenshot, autocalibrate, headers_to_use)
 }
