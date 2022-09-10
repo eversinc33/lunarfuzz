@@ -129,7 +129,8 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 				if take_screenshot {
 					var sc proto.PageCaptureScreenshot
 					sc_bytes, _ := page.Screenshot(false, &sc)
-					os.WriteFile(fmt.Sprintf("./output/%s.png", path), sc_bytes, 0644)
+					sc_path := filepath.Join(".", "output", fmt.Sprintf("%s.png", path))
+					os.WriteFile(sc_path, sc_bytes, 0644)
 				}
 			}
 
@@ -154,9 +155,11 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 
 	defer f.Close()
 
+	n_matches := 0
 	for i := 1; i < current_word; i++ {
 		r := <-result_channel
 		if r.Match {
+			n_matches++
 			logger.LogFound(r.Path, r.Words, r.Size)
 			if output_file != "" {
 				if _, err = f.WriteString(fmt.Sprintln(r.Path)); err != nil {
@@ -171,7 +174,11 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 
 	elapsed := time.Since(start)
 	logger.ClearLine()
-	logger.LogPositive(fmt.Sprintf("Finished fuzzing %d urls in %s with %d errors", n_words, elapsed, n_errors))
+	fmt.Println()
+	logger.Logln(fmt.Sprintf("Finished fuzzing %d urls", n_words))
+	logger.Logln(fmt.Sprintf(":: Matches:      %d", n_matches))
+	logger.Logln(fmt.Sprintf(":: Errors:       %d", n_errors))
+	logger.Logln(fmt.Sprintf(":: Time elapsed: %s", elapsed))
 	//c.WaitAllDone()
 }
 
@@ -234,8 +241,12 @@ func main() {
 	if autocalibrate {
 		_, filter_words = calibrate(browser, *target_url, *fast_mode) // Filtering by words is more reliable
 	}
-	logger.Log(fmt.Sprintf("Starting to fuzz %s with wordlist %s...", *target_url, *wordlist))
-	fmt.Println()
+	logger.Logln(fmt.Sprintf(":: Target:   %s", *target_url))
+	logger.Logln(fmt.Sprintf(":: Wordlist: %s", *wordlist))
+	logger.Logln(fmt.Sprintf(":: Threads:  %d", *max_goroutines))
+	if *output_file != "" {
+		logger.Logln(fmt.Sprintf(":: Outfile:  %s", *output_file))
+	}
 	fmt.Println()
 
 	doFuzz(browser, *target_url, *wordlist, filter_size, filter_words, filter_match, *take_screenshot, headers_to_use, *fast_mode, *max_goroutines, *output_file)
