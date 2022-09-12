@@ -48,7 +48,7 @@ func calibrate(browser *rod.Browser, target_url string, fast_mode bool) ([]strin
 	page_words := []string{fmt.Sprint(len(strings.Split(res, " ")))}
 	page_size := []string{fmt.Sprint(len(res))}
 
-	w.PersistWith(spin.Spinner{Frames: []string{"A️"}}, fmt.Sprintf("utocalibration result: filter-size: %s, filter-words: %s", page_size[0], page_words[0]))
+	w.PersistWith(spin.Spinner{Frames: []string{"::"}}, fmt.Sprintf(" Calibration: filter-size: %s, filter-words: %s", page_size[0], page_words[0]))
 	return page_size, page_words
 }
 
@@ -76,8 +76,8 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	start := time.Now()
 	n_errors := 0
 
-	c := goccm.New(max_goroutines)
 	result_channel := make(chan fuzz.Result)
+	c := goccm.New(max_goroutines)
 
 	for scanner.Scan() {
 		fuzz_string := scanner.Text()
@@ -249,9 +249,9 @@ func main() {
 	if autocalibrate {
 		_, filter_words = calibrate(browser, *target_url, *fast_mode) // Filtering by words is more reliable
 	}
-	logger.Logln(fmt.Sprintf(":: Target:   %s", *target_url))
-	logger.Logln(fmt.Sprintf(":: Wordlist: %s", *wordlist))
-	logger.Logln(fmt.Sprintf(":: Threads:  %d", *max_goroutines))
+	logger.Logln(fmt.Sprintf(":: Target:      %s", *target_url))
+	logger.Logln(fmt.Sprintf(":: Wordlist:    %s", *wordlist))
+	logger.Logln(fmt.Sprintf(":: Threads:     %d", *max_goroutines))
 	if *output_file != "" {
 		logger.Logln(fmt.Sprintf(":: Outfile:  %s", *output_file))
 	}
