@@ -76,8 +76,8 @@ func doFuzz(browser *rod.Browser, target_url string, wordlist_path string, filte
 	start := time.Now()
 	n_errors := 0
 
-	result_channel := make(chan fuzz.Result)
 	c := goccm.New(max_goroutines)
+	result_channel := make(chan fuzz.Result)
 
 	for scanner.Scan() {
 		fuzz_string := scanner.Text()
@@ -242,7 +242,7 @@ func main() {
 
 	headers_to_use := driver.ParseHeaders(headers)
 
-    domain := strings.Split(strings.Split(*target_url, "://")[1], "/")[0]
+	domain := strings.Split(strings.Split(*target_url, "://")[1], "/")[0]
 	browser := driver.SetupBrowser(cookies, domain)
 	defer browser.MustClose()
 

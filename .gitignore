@@ -2,3 +2,4 @@ output/
 wordlists/
 lunarfuzz
 matches.txt
+.DS_Store
