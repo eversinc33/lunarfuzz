@@ -242,7 +242,8 @@ func main() {
 
 	headers_to_use := driver.ParseHeaders(headers)
 
-	browser := driver.SetupBrowser(cookies)
+    domain := strings.Split(strings.Split(*target_url, "://")[1], "/")[0]
+	browser := driver.SetupBrowser(cookies, domain)
 	defer browser.MustClose()
 
 	if autocalibrate {
